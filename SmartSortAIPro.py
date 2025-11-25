@@ -13,7 +13,9 @@ import datetime
 # --- CONFIGURATION ---
 APP_NAME = "SmartSort AI"
 DOWNLOADS_DIR = os.path.expanduser("~/Downloads")
+DESKTOP_DIR = os.path.expanduser("~/Desktop")
 TARGET_DIR = os.path.expanduser("~/Documents/SmartSort_Vault")
+
 log_file = os.path.join(os.path.expanduser("~"), "smartsort_debug.log")
 logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -22,7 +24,7 @@ SEMANTIC_RULES = {
     "invoice": "Financial/Invoices",
     "receipt": "Financial/Receipts",
     "resume": "HR/Resumes",
-    "report": "Work/Reports",  # Added this for your screenshot!
+    "report": "Work/Reports",
     "assignment": "University/Assignments"
 }
 
@@ -48,12 +50,12 @@ class ContentBrain:
         except: pass
         text = text.lower()
 
-        # Check Semantic Keywords
+        # Semantic Check
         for key, folder in SEMANTIC_RULES.items():
             if key in text or key in filename.lower():
-                return folder, filename # Found a smart match!
+                return folder, filename
 
-        # Fallback: Extension Sort
+        # Extension Check
         for folder, extensions in EXTENSION_MAP.items():
             if ext in extensions:
                 return folder, filename
@@ -65,7 +67,6 @@ class ProHandler(FileSystemEventHandler):
         if not event.is_directory:
             threading.Thread(target=self.process, args=(event.src_path,)).start()
 
-    # --- NEW: Catch Renamed Files (The Missing Link) ---
     def on_moved(self, event):
         if not event.is_directory:
             threading.Thread(target=self.process, args=(event.dest_path,)).start()
@@ -73,15 +74,15 @@ class ProHandler(FileSystemEventHandler):
     def process(self, filepath):
         filename = os.path.basename(filepath)
         
-        # 1. Ignore Temp Files
-        if filename.startswith(".") or "crdownload" in filename or filename == "Unknown": 
-            return
+        # SAFETY: Don't move the App itself, hidden files, or the Vault
+        if filename.startswith(".") or "crdownload" in filename or filename == "Unknown": return
+        if filename in ["SmartSort.app", "SmartSort.zip", "SmartSort_Vault"]: return
 
-        # 2. Wait for file write to finish
-        time.sleep(2)
-        if not os.path.exists(filepath): return # File moved or deleted
+        # If it's a new file, give it time to write. If existing, this is fast.
+        if os.path.exists(filepath):
+             # Basic check to see if file is locked/writing (simple sleep)
+            time.sleep(1)
 
-        # 3. Analyze & Sort
         try:
             brain = ContentBrain()
             folder, new_name = brain.analyze(filepath, filename)
@@ -102,6 +103,22 @@ class ProHandler(FileSystemEventHandler):
         except Exception as e:
             logging.error(f"Error sorting {filename}: {e}")
 
+# --- STARTUP CLEANUP ---
+def run_initial_cleanup():
+    """Scans Desktop and Downloads immediately on startup"""
+    logging.info("--- Running Startup Cleanup ---")
+    handler = ProHandler()
+    folders_to_clean = [DOWNLOADS_DIR, DESKTOP_DIR]
+
+    for folder in folders_to_clean:
+        if os.path.exists(folder):
+            for filename in os.listdir(folder):
+                filepath = os.path.join(folder, filename)
+                # Only process files, skip directories
+                if os.path.isfile(filepath):
+                    handler.process(filepath)
+    logging.info("--- Cleanup Complete ---")
+
 # --- GUI ---
 def create_icon():
     image = Image.new('RGB', (64, 64), color=(0, 122, 204))
@@ -110,8 +127,14 @@ def create_icon():
     return image
 
 def run_app():
+    # 1. Clean existing mess FIRST
+    run_initial_cleanup()
+
+    # 2. Start Watching for NEW mess
     observer = Observer()
-    observer.schedule(ProHandler(), DOWNLOADS_DIR, recursive=False)
+    handler = ProHandler()
+    observer.schedule(handler, DOWNLOADS_DIR, recursive=False)
+    observer.schedule(handler, DESKTOP_DIR, recursive=False)
     observer.start()
     
     image = create_icon()
