@@ -1,0 +1,31 @@
+name: Build Windows Exe
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Dependencies
+      run: |
+        pip install pyinstaller watchdog pypdf pystray pillow
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=pystray --name "SmartSort" SmartSortAIPro.py
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: SmartSort-Windows-Exe
+        path: dist/SmartSort.exe
