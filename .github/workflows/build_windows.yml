@@ -9,24 +9,24 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4  # Updated to v4
+    - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v5  # Updated to v5
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.11' # Updated to a stable version for Windows
 
     - name: Install Dependencies
       run: |
-        pip install pyinstaller watchdog pypdf pystray pillow
+        pip install pyinstaller watchdog pypdf pystray pillow customtkinter packaging
 
     - name: Build with PyInstaller
       run: |
-        # IMPORTANT: Ensure 'SmartSortAIPro.py' matches your actual filename!
-        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=pystray --name "SmartSort" SmartSortAIPro.py
+        # Build command with GUI imports
+        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=Pillow --hidden-import=pystray --hidden-import=customtkinter --name "SmartSort" main.py
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4  # FIX: Updated to v4
+      uses: actions/upload-artifact@v4
       with:
         name: SmartSort-Windows-Exe
         path: dist/SmartSort.exe
