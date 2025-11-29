@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {
     },
     "extension_rules": {
         "Images": [".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"],
-        "Documents": [".pdf", ".docx", ".txt", ".xlsx", ".pptx", ".csv",".rtf],
+        "Documents": [".pdf", ".docx", ".txt", ".xlsx", ".pptx", ".csv",".rtf"],
         "Audio": [".mp3", ".wav", ".aac"],
         "Video": [".mp4", ".mkv", ".mov", ".avi"],
         "Archives": [".zip", ".rar", ".7z", ".tar", ".gz"],
