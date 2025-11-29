@@ -3,82 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartSort AI - The Intelligent File Manager</title>
+    <title>SmartSort AI - The Digital Janitor</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --dark: #0f172a;
-            --light: #f8fafc;
-            --text: #334155;
-            --mac: #000000;
-            --win: #0078D4;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --primary: #3b82f6;
+            --accent: #10b981;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
         }
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--light); line-height: 1.6; }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 5%;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #334155;
+        }
+
+        .logo { font-weight: 800; font-size: 1.4rem; color: white; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .logo span { color: var(--primary); }
         
-        /* Navigation */
-        nav { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .logo { font-weight: 800; font-size: 1.5rem; color: var(--dark); text-decoration: none; display: flex; align-items: center; gap: 10px; }
-        .github-link { color: var(--text); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
-        .github-link:hover { color: var(--primary); }
+        .social-link {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .social-link:hover { color: white; }
 
         /* Hero Section */
-        header { text-align: center; padding: 100px 20px; max-width: 800px; margin: auto; }
-        h1 { font-size: 3.5rem; color: var(--dark); margin-bottom: 20px; line-height: 1.1; }
-        .subtitle { font-size: 1.25rem; color: #64748b; margin-bottom: 40px; }
-        
-        /* Buttons */
-        .btn-container { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
-        .btn { padding: 15px 35px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 1.1rem; transition: transform 0.2s, box-shadow 0.2s; display: inline-flex; align-items: center; gap: 10px; }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-        
-        .btn-win { background-color: var(--win); color: white; }
-        .btn-mac { background-color: var(--mac); color: white; }
+        .hero {
+            text-align: center;
+            padding: 80px 20px 40px;
+            max-width: 900px;
+            margin: auto;
+        }
 
-        /* Features */
-        .features { padding: 80px 20px; background: white; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 40px; max-width: 1000px; margin: auto; }
-        .card { padding: 30px; border-radius: 12px; background: var(--light); border: 1px solid #e2e8f0; }
-        .card h3 { color: var(--dark); margin-top: 0; }
-        .icon { font-size: 2rem; margin-bottom: 15px; display: block; }
+        h1 {
+            font-size: 4rem;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
 
-        /* Installation */
-        .install { padding: 80px 20px; max-width: 800px; margin: auto; }
-        .tab-buttons { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { background: none; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent; color: #94a3b8; }
-        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .step-box { background: white; padding: 30px; border-radius: 12px; border: 1px solid #e2e8f0; display: none; }
-        .step-box.active { display: block; }
-        code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+        .subtitle { font-size: 1.3rem; color: var(--text-dim); margin-bottom: 40px; max-width: 600px; margin-left: auto; margin-right: auto; }
+
+        .btn-group { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 50px; }
+
+        .btn {
+            padding: 16px 32px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid transparent;
+        }
+
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+        
+        .btn-secondary { background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.1); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+
+        /* The GIF Container */
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto 80px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+            aspect-ratio: 16/9;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .demo-container img { width: 100%; height: auto; display: block; }
+
+        /* Features Grid */
+        .features { padding: 80px 5%; background: #162032; }
+        .section-title { text-align: center; font-size: 2.5rem; margin-bottom: 60px; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            transition: 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); border-color: var(--primary); }
+        
+        .icon { font-size: 2.5rem; margin-bottom: 20px; display: block; }
+        .card h3 { font-size: 1.4rem; margin-bottom: 10px; color: white; }
+        .card p { color: var(--text-dim); }
 
         /* Footer */
-        footer { text-align: center; padding: 40px; color: #94a3b8; font-size: 0.9rem; }
+        footer { padding: 50px; text-align: center; border-top: 1px solid #334155; font-size: 0.9rem; color: var(--text-dim); }
         footer a { color: var(--primary); text-decoration: none; }
 
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .btn-group { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; box-sizing: border-box; }
+        }
     </style>
 </head>
 <body>
 
     <nav>
-        <a href="#" class="logo">🚀 SmartSort AI</a>
-        <a href="https://github.com/a1k7/SmartSort-AI" class="github-link">View Source Code →</a>
+        <a href="#" class="logo">🚀 SmartSort <span>AI</span></a>
+        <a href="https://github.com/a1k7/SmartSort-AI" class="social-link">
+            <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+            GitHub
+        </a>
     </nav>
 
-    <header>
+    <div class="hero">
+        <div style="margin-bottom: 20px;">
+            <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.2);">
+                ✨ New: v3.0 with Settings GUI
+            </span>
+        </div>
         <h1>Your Desktop.<br>Organized Automatically.</h1>
-        <p class="subtitle">The intelligent "Digital Janitor" that cleans your Downloads and Desktop instantly. 100% Offline. 100% Free.</p>
+        <p class="subtitle">The open-source "Digital Janitor" that cleans your desktop in the background using local AI. No cloud. No clutter.</p>
         
-        <div class="btn-container">
-            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v2.2/SmartSort.exe" class="btn btn-win">
-                <span>🪟</span> Download for Windows
+        <div class="btn-group">
+            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v3.0/SmartSort.zip" class="btn btn-secondary" id="mac-btn">
+                🍎 Download for Mac
             </a>
-            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v2.2/SmartSort.zip" class="btn btn-mac">
-                <span>🍎</span> Download for Mac
+            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v3.0/SmartSort.exe" class="btn btn-secondary" id="win-btn">
+                🪟 Download for Windows
             </a>
         </div>
-        <p style="font-size: 0.8rem; margin-top: 15px; color: #94a3b8;">v2.2 • Open Source</p>
-    </header>
+    </div>
+
+    <div class="demo-container">
+        <div style="color: #64748b;">
+            [ ✨ Place your Animated GIF here ✨ ]<br>
+            (Upload demo.gif to your repo and update src)
+        </div>
+        </div>
 
     <section class="features">
+        <h2 class="section-title">Why use SmartSort?</h2>
         <div class="grid">
             <div class="card">
                 <span class="icon">🧠</span>
@@ -88,52 +192,42 @@
             <div class="card">
                 <span class="icon">🛡️</span>
                 <h3>Privacy First</h3>
-                <p>Runs 100% offline on your device. Your personal files are never uploaded to the cloud.</p>
+                <p>Runs 100% offline on your device. Your bank statements and personal files never leave your laptop.</p>
             </div>
             <div class="card">
                 <span class="icon">🧹</span>
                 <h3>Startup Cleanup</h3>
-                <p>Automatically cleans your Desktop and Downloads folder every time you log in.</p>
+                <p>Automatically scans and cleans your Desktop & Downloads folder the moment you log in.</p>
+            </div>
+            <div class="card">
+                <span class="icon">⚙️</span>
+                <h3>Full Control</h3>
+                <p>New in v3.0! Toggle features, view logs, and customize sorting rules with a beautiful UI.</p>
             </div>
         </div>
     </section>
 
-    <section class="install">
-        <h2 style="text-align: center;">How to Install</h2>
-        <div class="tab-buttons">
-            <button class="tab-btn active" onclick="showTab('win')">Windows</button>
-            <button class="tab-btn" onclick="showTab('mac')">macOS</button>
-        </div>
-
-        <div id="win" class="step-box active">
-            <ol>
-                <li>Download <strong>SmartSort.exe</strong>.</li>
-                <li>Double-click to run.</li>
-                <li>If you see "Windows protected your PC", click <strong>More Info > Run Anyway</strong>.</li>
-                <li>To auto-start: Press <code>Win+R</code>, type <code>shell:startup</code>, and drag the app inside.</li>
-            </ol>
-        </div>
-
-        <div id="mac" class="step-box">
-            <ol>
-                <li>Download and unzip <strong>SmartSort.zip</strong>.</li>
-                <li><strong>Important:</strong> Drag the App into your <strong>Applications</strong> folder.</li>
-                <li>Right-click and select <strong>Open</strong> to bypass security warning.</li>
-                <li>Add to <strong>System Settings > Login Items</strong> for auto-cleanup.</li>
-            </ol>
-        </div>
-    </section>
-
     <footer>
-        <p>Built with 💙 by <a href="https://github.com/a1k7">a1k7</a></p>
+        <p>Open Source • MIT License • Built by <a href="https://github.com/a1k7">a1k7</a></p>
     </footer>
 
     <script>
-        function showTab(os) {
-            document.querySelectorAll('.step-box').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(os).classList.add('active');
-            event.target.classList.add('active');
+        // OS Detection Logic
+        const platform = navigator.platform.toLowerCase();
+        const macBtn = document.getElementById('mac-btn');
+        const winBtn = document.getElementById('win-btn');
+
+        if (platform.includes('mac')) {
+            macBtn.classList.remove('btn-secondary');
+            macBtn.classList.add('btn-primary'); // Highlight Mac
+            macBtn.innerHTML += " (Recommended)";
+        } else if (platform.includes('win')) {
+            winBtn.classList.remove('btn-secondary');
+            winBtn.classList.add('btn-primary'); // Highlight Windows
+            winBtn.innerHTML += " (Recommended)";
+        } else {
+            // Fallback: Highlight both slightly or keep secondary
+            macBtn.classList.add('btn-secondary');
         }
     </script>
 
