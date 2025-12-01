@@ -10,6 +10,7 @@ import sys
 import requests
 import webbrowser
 import datetime
+import re
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from watchdog.observers import Observer
@@ -17,9 +18,10 @@ from watchdog.events import FileSystemEventHandler
 from pypdf import PdfReader
 from PIL import Image, ImageDraw
 import pystray
+import google.generativeai as genai
 
 # --- CONFIGURATION ---
-APP_VERSION = "v3.1"
+APP_VERSION = "v4.1"
 GITHUB_REPO = "a1k7/SmartSort-AI"
 APP_NAME = "SmartSort AI"
 
@@ -32,6 +34,8 @@ DEFAULT_CONFIG = {
     "target_dir": os.path.expanduser("~/Documents/SmartSort_Vault"),
     "deep_scan": True,
     "startup_cleanup": True,
+    "ai_renaming": False,
+    "gemini_api_key": "",
     "semantic_rules": {
         "invoice": "Financial/Invoices",
         "receipt": "Financial/Receipts",
@@ -64,26 +68,73 @@ def save_config(new_config):
     with open(CONFIG_FILE, 'w') as f: json.dump(new_config, f, indent=4)
 
 def update_stats(count=1):
-    data = {"files_sorted": 0, "time_saved_mins": 0}
+    data = {"files_sorted": 0, "ai_renames": 0}
     if os.path.exists(STATS_FILE):
         try:
-            with open(STATS_FILE, 'r') as f: data = json.load(f)
+            with open(STATS_FILE, 'r') as f:
+                data = json.load(f)
         except: pass
     
     data["files_sorted"] += count
-    data["time_saved_mins"] += (count * 0.5) # Assume 30s saved per file
-    
     with open(STATS_FILE, 'w') as f: json.dump(data, f)
 
 def get_stats():
     if os.path.exists(STATS_FILE):
         try:
-            with open(STATS_FILE, 'r') as f: return json.load(f)
+            with open(STATS_FILE, 'r') as f:
+                return json.load(f)
         except: pass
-    return {"files_sorted": 0, "time_saved_mins": 0}
+    return {"files_sorted": 0, "ai_renames": 0}
 
-# --- THE BRAIN ---
+# --- THE HYBRID BRAIN ---
 class ContentBrain:
+    def extract_date(self, text):
+        date_patterns = [
+            r'\d{4}-\d{2}-\d{2}',
+            r'\d{2}/\d{2}/\d{4}',
+            r'\d{2}\s(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s\d{4}'
+        ]
+        for pattern in date_patterns:
+            match = re.search(pattern, text)
+            if match: return match.group(0).replace("/", "-").replace(" ", "_")
+        return str(datetime.date.today())
+
+    def extract_entity(self, text):
+        common_entities = ["Amazon", "Apple", "Google", "Netflix", "Spotify", "Uber", "Lyft", "Bank", "Hospital", "University"]
+        for entity in common_entities:
+            if entity.lower() in text.lower(): return entity
+        return "Doc"
+
+    def get_local_smart_name(self, text, original_name):
+        if len(text) < 10: return original_name
+        
+        doc_type = "File"
+        if "invoice" in text.lower(): doc_type = "Invoice"
+        elif "receipt" in text.lower(): doc_type = "Receipt"
+        elif "report" in text.lower(): doc_type = "Report"
+        elif "resume" in text.lower(): doc_type = "Resume"
+        else: return original_name
+
+        entity = self.extract_entity(text)
+        date_str = self.extract_date(text)
+        ext = os.path.splitext(original_name)[1]
+        
+        new_name = f"{doc_type}_{entity}_{date_str}{ext}"
+        logging.info(f"⚡ Local Smart Rename: {original_name} -> {new_name}")
+        return new_name
+
+    def get_ai_filename(self, text, original_name, api_key):
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt = f"Rename this file concisely. Format: Type_Entity_Date.ext. Text: {text[:300]}"
+            response = model.generate_content(prompt)
+            clean = response.text.strip().replace(" ", "_")
+            ext = os.path.splitext(original_name)[1]
+            if not clean.endswith(ext): clean += ext
+            return clean
+        except: return original_name
+
     def analyze(self, filepath, filename, config):
         ext = os.path.splitext(filepath)[1].lower()
         text = ""
@@ -96,20 +147,26 @@ class ContentBrain:
                 elif ext in [".txt", ".md", ".csv", ".rtf"]:
                     with open(filepath, "r", errors="ignore") as f: text = f.read(2000)
             except: pass
-        text = text.lower()
+        
+        final_name = filename
+        
+        # Priority 1: AI API
+        if config.get("ai_renaming", False) and config.get("gemini_api_key"):
+            final_name = self.get_ai_filename(text, filename, config["gemini_api_key"])
+        # Priority 2: Local Smart Logic
+        elif config.get("deep_scan", True) and len(text) > 20:
+            final_name = self.get_local_smart_name(text, filename)
 
+        text_lower = text.lower()
         for key, folder in config["semantic_rules"].items():
-            if key in text or key in filename.lower():
-                if "financial" in folder.lower() and str(datetime.date.today()) not in filename:
-                    name, ext = os.path.splitext(filename)
-                    return folder, f"{key.title()}_{datetime.date.today()}_{name}{ext}"
-                return folder, filename
+            if key in text_lower or key in filename.lower():
+                return folder, final_name
 
         for folder, extensions in config["extension_rules"].items():
             if ext in extensions:
-                return folder, filename
+                return folder, final_name
                 
-        return "Others", filename
+        return "Others", final_name
 
 class ProHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -141,51 +198,36 @@ class ProHandler(FileSystemEventHandler):
                 counter += 1
                 
             shutil.move(filepath, final_path)
-            update_stats() # TRACK STATS
-            logging.info(f"Sorted {filename} -> {folder}")
+            update_stats()
+            logging.info(f"Sorted {filename} -> {folder}/{new_name}")
         except Exception as e:
             logging.error(f"Error: {e}")
 
-# --- GUI DASHBOARD ---
+# --- GUI ---
 class DashboardWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"SmartSort AI {APP_VERSION}")
-        self.geometry("700x550")
+        self.title(f"{APP_NAME} {APP_VERSION}")
+        self.geometry("700x600")
         self.config = load_config()
         
-        # TABS
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(padx=20, pady=20, fill="both", expand=True)
-        
         self.tab_dash = self.tabview.add("Dashboard")
-        self.tab_rules = self.tabview.add("Rules & Settings")
+        self.tab_rules = self.tabview.add("Settings")
         
         self.build_dashboard()
         self.build_settings()
 
     def build_dashboard(self):
         stats = get_stats()
-        
-        # Header
         ctk.CTkLabel(self.tab_dash, text="Your Impact", font=("Arial", 24, "bold")).pack(pady=20)
         
-        # Stats Cards
         frame = ctk.CTkFrame(self.tab_dash, fg_color="transparent")
         frame.pack(pady=10)
-        
         self.create_stat_card(frame, "Files Sorted", str(stats["files_sorted"]), "#3b82f6")
-        self.create_stat_card(frame, "Time Saved", f"{int(stats['time_saved_mins'])} min", "#10b981")
-
-        # Update Checker
-        ctk.CTkButton(self.tab_dash, text="Check for Updates", command=self.check_update).pack(pady=40)
         
-        # Viral Loop
-        ctk.CTkLabel(self.tab_dash, text="Share your setup with friends!", text_color="gray").pack()
-        btn_frame = ctk.CTkFrame(self.tab_dash, fg_color="transparent")
-        btn_frame.pack(pady=10)
-        ctk.CTkButton(btn_frame, text="Export Rules", command=self.export_rules, width=120).pack(side="left", padx=10)
-        ctk.CTkButton(btn_frame, text="Import Rules", command=self.import_rules, width=120, fg_color="#555").pack(side="left", padx=10)
+        ctk.CTkButton(self.tab_dash, text="Check for Updates", command=self.check_update).pack(pady=40)
 
     def create_stat_card(self, parent, title, value, color):
         card = ctk.CTkFrame(parent, width=200, height=100, border_color=color, border_width=2)
@@ -194,76 +236,50 @@ class DashboardWindow(ctk.CTk):
         ctk.CTkLabel(card, text=title, font=("Arial", 14)).pack(pady=(5,20))
 
     def build_settings(self):
-        # Switches
+        # AI Section
+        ai_frame = ctk.CTkFrame(self.tab_rules)
+        ai_frame.pack(pady=10, padx=20, fill="x")
+        ctk.CTkLabel(ai_frame, text="✨ AI Power (Gemini)", font=("Arial", 14, "bold")).pack(pady=5)
+        
+        self.var_ai = ctk.BooleanVar(value=self.config.get("ai_renaming", False))
+        ctk.CTkSwitch(ai_frame, text="Enable AI Auto-Rename", variable=self.var_ai).pack(pady=5)
+        
+        self.entry_api = ctk.CTkEntry(ai_frame, placeholder_text="Paste Gemini API Key Here", width=300)
+        self.entry_api.pack(pady=10)
+        if self.config.get("gemini_api_key"): self.entry_api.insert(0, self.config["gemini_api_key"])
+        
+        ctk.CTkLabel(ai_frame, text="Get free key at aistudio.google.com", font=("Arial", 10), text_color="gray").pack(pady=5)
+
+        # Standard Settings
         self.var_deep = ctk.BooleanVar(value=self.config.get("deep_scan", True))
         self.var_cleanup = ctk.BooleanVar(value=self.config.get("startup_cleanup", True))
         
-        ctk.CTkSwitch(self.tab_rules, text="Enable Deep Scan", variable=self.var_deep).pack(pady=10)
-        ctk.CTkSwitch(self.tab_rules, text="Startup Cleanup", variable=self.var_cleanup).pack(pady=10)
+        ctk.CTkSwitch(self.tab_rules, text="Deep Scan (PDF Reading)", variable=self.var_deep).pack(pady=5)
+        ctk.CTkSwitch(self.tab_rules, text="Startup Cleanup", variable=self.var_cleanup).pack(pady=5)
 
-        # JSON Editor
-        ctk.CTkLabel(self.tab_rules, text="Edit Rules (JSON):").pack(anchor="w", padx=20)
-        self.text_area = ctk.CTkTextbox(self.tab_rules, height=200)
-        self.text_area.pack(padx=20, pady=5, fill="both", expand=True)
-        self.text_area.insert("0.0", json.dumps(self.config["semantic_rules"], indent=4))
+        # Buttons
+        ctk.CTkButton(self.tab_rules, text="Save & Apply", command=self.save_config, fg_color="#2cc985", text_color="black").pack(pady=20)
 
-        # Action Buttons
-        btn_frame = ctk.CTkFrame(self.tab_rules, fg_color="transparent")
-        btn_frame.pack(pady=20)
-        ctk.CTkButton(btn_frame, text="Open Logs", command=self.open_logs, fg_color="#555").pack(side="left", padx=10)
-        ctk.CTkButton(btn_frame, text="Save & Restart", command=self.save_config, fg_color="#2cc985", text_color="black").pack(side="left", padx=10)
-
-    # --- LOGIC METHODS ---
     def check_update(self):
         try:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
             response = requests.get(url, timeout=3).json()
-            latest_tag = response.get("tag_name", APP_VERSION)
-            
-            if latest_tag != APP_VERSION:
-                msg = f"Update Available!\n\nCurrent: {APP_VERSION}\nNew: {latest_tag}"
-                if messagebox.askyesno("Update", msg + "\n\nDownload now?"):
+            latest = response.get("tag_name", APP_VERSION)
+            if latest != APP_VERSION:
+                if messagebox.askyesno("Update", f"New version {latest} available!"):
                     webbrowser.open(f"https://github.com/{GITHUB_REPO}/releases/latest")
-            else:
-                messagebox.showinfo("Update", "You are up to date! 🚀")
-        except:
-            messagebox.showerror("Error", "Could not check for updates.")
-
-    def export_rules(self):
-        path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
-        if path:
-            with open(path, 'w') as f: json.dump(self.config["semantic_rules"], f, indent=4)
-            messagebox.showinfo("Success", "Rules exported successfully!")
-
-    def import_rules(self):
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
-        if path:
-            try:
-                with open(path, 'r') as f: new_rules = json.load(f)
-                self.config["semantic_rules"].update(new_rules)
-                save_config(self.config)
-                self.text_area.delete("0.0", "end")
-                self.text_area.insert("0.0", json.dumps(self.config["semantic_rules"], indent=4))
-                messagebox.showinfo("Success", "Rules imported! Click Save to apply.")
-            except:
-                messagebox.showerror("Error", "Invalid JSON file.")
-
-    def open_logs(self):
-        if platform.system() == "Darwin": subprocess.call(('open', LOG_FILE))
-        else: os.startfile(LOG_FILE)
+            else: messagebox.showinfo("Info", "Up to date!")
+        except: messagebox.showerror("Error", "Check failed")
 
     def save_config(self):
-        try:
-            new_rules = json.loads(self.text_area.get("0.0", "end"))
-            self.config["semantic_rules"] = new_rules
-            self.config["deep_scan"] = self.var_deep.get()
-            self.config["startup_cleanup"] = self.var_cleanup.get()
-            save_config(self.config)
-            self.destroy()
-        except:
-            messagebox.showerror("Error", "Invalid JSON format in rules.")
+        self.config["ai_renaming"] = self.var_ai.get()
+        self.config["gemini_api_key"] = self.entry_api.get()
+        self.config["deep_scan"] = self.var_deep.get()
+        self.config["startup_cleanup"] = self.var_cleanup.get()
+        save_config(self.config)
+        self.destroy()
 
-# --- SYSTEM TRAY ---
+# --- TRAY ---
 def create_icon():
     image = Image.new('RGB', (64, 64), color=(0, 122, 204))
     d = ImageDraw.Draw(image)
@@ -271,10 +287,8 @@ def create_icon():
     return image
 
 def launch_dashboard(icon, item):
-    if getattr(sys, 'frozen', False):
-        subprocess.Popen([sys.executable, "--settings"])
-    else:
-        subprocess.Popen([sys.executable, __file__, "--settings"])
+    if getattr(sys, 'frozen', False): subprocess.Popen([sys.executable, "--settings"])
+    else: subprocess.Popen([sys.executable, __file__, "--settings"])
 
 def run_tray():
     config = load_config()
@@ -291,12 +305,10 @@ def run_tray():
     observer.schedule(handler, os.path.expanduser("~/Desktop"), recursive=False)
     observer.start()
     
-    image = create_icon()
-    menu = pystray.Menu(
-        pystray.MenuItem("📊 Dashboard & Settings", launch_dashboard),
+    icon = pystray.Icon("SmartSort", create_icon(), "SmartSort Running", menu=pystray.Menu(
+        pystray.MenuItem("✨ AI Dashboard", launch_dashboard),
         pystray.MenuItem("Exit", lambda icon, item: (observer.stop(), icon.stop()))
-    )
-    icon = pystray.Icon("SmartSort", image, "SmartSort Running", menu)
+    ))
     icon.run()
 
 if __name__ == "__main__":
