@@ -18,16 +18,16 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        pip install pyinstaller watchdog pypdf pystray pillow customtkinter packaging
+        pip install pyinstaller watchdog pypdf pystray pillow customtkinter packaging requests
 
     # 1. Build the raw .exe
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=Pillow --hidden-import=pystray --hidden-import=customtkinter --name "SmartSort" main.py
+        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=Pillow --hidden-import=pystray --hidden-import=customtkinter --hidden-import=requests --name "SmartSort" main.py
 
-    # 2. Build the Installer using Inno Setup
+    # 2. Build the Installer using Inno Setup (CORRECTED ACTION NAME)
     - name: Compile .ISS to Setup.exe
-      uses: Minionguyjosh/inno-setup-action@v1.2.2
+      uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
       with:
         path: setup.iss
 
