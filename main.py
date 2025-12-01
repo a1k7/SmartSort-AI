@@ -7,17 +7,24 @@ import json
 import subprocess
 import platform
 import sys
+import requests
+import webbrowser
+import datetime
+from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from pypdf import PdfReader
 from PIL import Image, ImageDraw
 import pystray
-import datetime
 
 # --- CONFIGURATION ---
+APP_VERSION = "v3.1"
+GITHUB_REPO = "a1k7/SmartSort-AI"
 APP_NAME = "SmartSort AI"
+
 CONFIG_FILE = os.path.expanduser("~/smartsort_config.json")
+STATS_FILE = os.path.expanduser("~/smartsort_stats.json")
 LOG_FILE = os.path.expanduser("~/smartsort_debug.log")
 
 # Default Config
@@ -34,7 +41,7 @@ DEFAULT_CONFIG = {
     },
     "extension_rules": {
         "Images": [".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"],
-        "Documents": [".pdf", ".docx", ".txt", ".xlsx", ".pptx", ".csv",".rtf"],
+        "Documents": [".pdf", ".docx", ".txt", ".xlsx", ".pptx", ".csv", ".rtf"],
         "Audio": [".mp3", ".wav", ".aac"],
         "Video": [".mp4", ".mkv", ".mov", ".avi"],
         "Archives": [".zip", ".rar", ".7z", ".tar", ".gz"],
@@ -44,17 +51,36 @@ DEFAULT_CONFIG = {
 
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(message)s')
 
+# --- DATA MANAGER ---
 def load_config():
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'w') as f: json.dump(DEFAULT_CONFIG, f, indent=4)
         return DEFAULT_CONFIG
     try:
         with open(CONFIG_FILE, 'r') as f: return json.load(f)
-    except:
-        return DEFAULT_CONFIG
+    except: return DEFAULT_CONFIG
 
 def save_config(new_config):
     with open(CONFIG_FILE, 'w') as f: json.dump(new_config, f, indent=4)
+
+def update_stats(count=1):
+    data = {"files_sorted": 0, "time_saved_mins": 0}
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, 'r') as f: data = json.load(f)
+        except: pass
+    
+    data["files_sorted"] += count
+    data["time_saved_mins"] += (count * 0.5) # Assume 30s saved per file
+    
+    with open(STATS_FILE, 'w') as f: json.dump(data, f)
+
+def get_stats():
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, 'r') as f: return json.load(f)
+        except: pass
+    return {"files_sorted": 0, "time_saved_mins": 0}
 
 # --- THE BRAIN ---
 class ContentBrain:
@@ -62,27 +88,23 @@ class ContentBrain:
         ext = os.path.splitext(filepath)[1].lower()
         text = ""
         
-        # Deep Scan
         if config.get("deep_scan", True):
             try:
                 if ext == ".pdf":
                     reader = PdfReader(filepath)
                     text = "".join([page.extract_text() for page in reader.pages[:2]])
-                elif ext in [".txt", ".md", ".csv"]:
+                elif ext in [".txt", ".md", ".csv", ".rtf"]:
                     with open(filepath, "r", errors="ignore") as f: text = f.read(2000)
             except: pass
         text = text.lower()
 
-        # Semantic Rules
         for key, folder in config["semantic_rules"].items():
             if key in text or key in filename.lower():
-                # Smart Rename for Financial
                 if "financial" in folder.lower() and str(datetime.date.today()) not in filename:
                     name, ext = os.path.splitext(filename)
                     return folder, f"{key.title()}_{datetime.date.today()}_{name}{ext}"
                 return folder, filename
 
-        # Extension Rules
         for folder, extensions in config["extension_rules"].items():
             if ext in extensions:
                 return folder, filename
@@ -92,7 +114,6 @@ class ContentBrain:
 class ProHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory: threading.Thread(target=self.process, args=(event.src_path,)).start()
-    
     def on_moved(self, event):
         if not event.is_directory: threading.Thread(target=self.process, args=(event.dest_path,)).start()
 
@@ -100,7 +121,6 @@ class ProHandler(FileSystemEventHandler):
         config = load_config()
         filename = os.path.basename(filepath)
         
-        # Safety Checks
         if filename.startswith(".") or "crdownload" in filename or filename == "Unknown": return
         if filename in ["SmartSort.app", "SmartSort.zip", "SmartSort.exe"]: return
 
@@ -121,47 +141,118 @@ class ProHandler(FileSystemEventHandler):
                 counter += 1
                 
             shutil.move(filepath, final_path)
+            update_stats() # TRACK STATS
             logging.info(f"Sorted {filename} -> {folder}")
         except Exception as e:
             logging.error(f"Error: {e}")
 
-# --- GUI SETTINGS WINDOW ---
-class SettingsWindow(ctk.CTk):
+# --- GUI DASHBOARD ---
+class DashboardWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SmartSort AI - Settings")
-        self.geometry("600x500")
+        self.title(f"SmartSort AI {APP_VERSION}")
+        self.geometry("700x550")
         self.config = load_config()
         
-        ctk.CTkLabel(self, text="SmartSort Configuration", font=("Arial", 22, "bold")).pack(pady=20)
+        # TABS
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.pack(padx=20, pady=20, fill="both", expand=True)
+        
+        self.tab_dash = self.tabview.add("Dashboard")
+        self.tab_rules = self.tabview.add("Rules & Settings")
+        
+        self.build_dashboard()
+        self.build_settings()
 
+    def build_dashboard(self):
+        stats = get_stats()
+        
+        # Header
+        ctk.CTkLabel(self.tab_dash, text="Your Impact", font=("Arial", 24, "bold")).pack(pady=20)
+        
+        # Stats Cards
+        frame = ctk.CTkFrame(self.tab_dash, fg_color="transparent")
+        frame.pack(pady=10)
+        
+        self.create_stat_card(frame, "Files Sorted", str(stats["files_sorted"]), "#3b82f6")
+        self.create_stat_card(frame, "Time Saved", f"{int(stats['time_saved_mins'])} min", "#10b981")
+
+        # Update Checker
+        ctk.CTkButton(self.tab_dash, text="Check for Updates", command=self.check_update).pack(pady=40)
+        
+        # Viral Loop
+        ctk.CTkLabel(self.tab_dash, text="Share your setup with friends!", text_color="gray").pack()
+        btn_frame = ctk.CTkFrame(self.tab_dash, fg_color="transparent")
+        btn_frame.pack(pady=10)
+        ctk.CTkButton(btn_frame, text="Export Rules", command=self.export_rules, width=120).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="Import Rules", command=self.import_rules, width=120, fg_color="#555").pack(side="left", padx=10)
+
+    def create_stat_card(self, parent, title, value, color):
+        card = ctk.CTkFrame(parent, width=200, height=100, border_color=color, border_width=2)
+        card.pack(side="left", padx=20)
+        ctk.CTkLabel(card, text=value, font=("Arial", 32, "bold"), text_color=color).pack(pady=(20,0))
+        ctk.CTkLabel(card, text=title, font=("Arial", 14)).pack(pady=(5,20))
+
+    def build_settings(self):
+        # Switches
         self.var_deep = ctk.BooleanVar(value=self.config.get("deep_scan", True))
         self.var_cleanup = ctk.BooleanVar(value=self.config.get("startup_cleanup", True))
         
-        switch_frame = ctk.CTkFrame(self)
-        switch_frame.pack(pady=10, padx=20, fill="x")
-        
-        ctk.CTkSwitch(switch_frame, text="Enable Deep Scan", variable=self.var_deep).pack(side="left", padx=20, pady=10)
-        ctk.CTkSwitch(switch_frame, text="Startup Cleanup", variable=self.var_cleanup).pack(side="left", padx=20, pady=10)
+        ctk.CTkSwitch(self.tab_rules, text="Enable Deep Scan", variable=self.var_deep).pack(pady=10)
+        ctk.CTkSwitch(self.tab_rules, text="Startup Cleanup", variable=self.var_cleanup).pack(pady=10)
 
-        ctk.CTkLabel(self, text="Edit Rules (JSON):").pack(anchor="w", padx=25, pady=(15,0))
-        self.text_area = ctk.CTkTextbox(self, height=200)
+        # JSON Editor
+        ctk.CTkLabel(self.tab_rules, text="Edit Rules (JSON):").pack(anchor="w", padx=20)
+        self.text_area = ctk.CTkTextbox(self.tab_rules, height=200)
         self.text_area.pack(padx=20, pady=5, fill="both", expand=True)
-        
-        pretty_json = json.dumps(self.config["semantic_rules"], indent=4)
-        self.text_area.insert("0.0", pretty_json)
+        self.text_area.insert("0.0", json.dumps(self.config["semantic_rules"], indent=4))
 
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        # Action Buttons
+        btn_frame = ctk.CTkFrame(self.tab_rules, fg_color="transparent")
         btn_frame.pack(pady=20)
-        
         ctk.CTkButton(btn_frame, text="Open Logs", command=self.open_logs, fg_color="#555").pack(side="left", padx=10)
-        ctk.CTkButton(btn_frame, text="Save & Close", command=self.save_and_close, fg_color="#2cc985", text_color="black").pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="Save & Restart", command=self.save_config, fg_color="#2cc985", text_color="black").pack(side="left", padx=10)
+
+    # --- LOGIC METHODS ---
+    def check_update(self):
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            response = requests.get(url, timeout=3).json()
+            latest_tag = response.get("tag_name", APP_VERSION)
+            
+            if latest_tag != APP_VERSION:
+                msg = f"Update Available!\n\nCurrent: {APP_VERSION}\nNew: {latest_tag}"
+                if messagebox.askyesno("Update", msg + "\n\nDownload now?"):
+                    webbrowser.open(f"https://github.com/{GITHUB_REPO}/releases/latest")
+            else:
+                messagebox.showinfo("Update", "You are up to date! 🚀")
+        except:
+            messagebox.showerror("Error", "Could not check for updates.")
+
+    def export_rules(self):
+        path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
+        if path:
+            with open(path, 'w') as f: json.dump(self.config["semantic_rules"], f, indent=4)
+            messagebox.showinfo("Success", "Rules exported successfully!")
+
+    def import_rules(self):
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+        if path:
+            try:
+                with open(path, 'r') as f: new_rules = json.load(f)
+                self.config["semantic_rules"].update(new_rules)
+                save_config(self.config)
+                self.text_area.delete("0.0", "end")
+                self.text_area.insert("0.0", json.dumps(self.config["semantic_rules"], indent=4))
+                messagebox.showinfo("Success", "Rules imported! Click Save to apply.")
+            except:
+                messagebox.showerror("Error", "Invalid JSON file.")
 
     def open_logs(self):
         if platform.system() == "Darwin": subprocess.call(('open', LOG_FILE))
         else: os.startfile(LOG_FILE)
 
-    def save_and_close(self):
+    def save_config(self):
         try:
             new_rules = json.loads(self.text_area.get("0.0", "end"))
             self.config["semantic_rules"] = new_rules
@@ -169,8 +260,8 @@ class SettingsWindow(ctk.CTk):
             self.config["startup_cleanup"] = self.var_cleanup.get()
             save_config(self.config)
             self.destroy()
-        except Exception as e:
-            ctk.CTkLabel(self, text=f"Error: {e}", text_color="red").pack()
+        except:
+            messagebox.showerror("Error", "Invalid JSON format in rules.")
 
 # --- SYSTEM TRAY ---
 def create_icon():
@@ -179,44 +270,38 @@ def create_icon():
     d.rectangle([20, 20, 44, 44], fill="white")
     return image
 
-def launch_settings(icon, item):
-    # Launch Settings in a separate process to avoid Mac Thread conflicts
+def launch_dashboard(icon, item):
     if getattr(sys, 'frozen', False):
         subprocess.Popen([sys.executable, "--settings"])
     else:
         subprocess.Popen([sys.executable, __file__, "--settings"])
 
 def run_tray():
-    # 1. Startup Cleanup
     config = load_config()
     if config.get("startup_cleanup", True):
         handler = ProHandler()
-        folders = [os.path.expanduser("~/Downloads"), os.path.expanduser("~/Desktop")]
-        for f in folders:
+        for f in [os.path.expanduser("~/Downloads"), os.path.expanduser("~/Desktop")]:
             if os.path.exists(f):
                 for file in os.listdir(f):
                     if os.path.isfile(os.path.join(f, file)): handler.process(os.path.join(f, file))
 
-    # 2. Watcher
     observer = Observer()
     handler = ProHandler()
     observer.schedule(handler, os.path.expanduser("~/Downloads"), recursive=False)
     observer.schedule(handler, os.path.expanduser("~/Desktop"), recursive=False)
     observer.start()
     
-    # 3. Tray Icon
     image = create_icon()
     menu = pystray.Menu(
-        pystray.MenuItem("⚙️ Settings", launch_settings),
+        pystray.MenuItem("📊 Dashboard & Settings", launch_dashboard),
         pystray.MenuItem("Exit", lambda icon, item: (observer.stop(), icon.stop()))
     )
     icon = pystray.Icon("SmartSort", image, "SmartSort Running", menu)
     icon.run()
 
-# --- MAIN ENTRY POINT ---
 if __name__ == "__main__":
     if "--settings" in sys.argv:
-        app = SettingsWindow()
+        app = DashboardWindow()
         app.mainloop()
     else:
         run_tray()
