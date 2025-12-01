@@ -1,4 +1,4 @@
-name: Build Windows Installer
+name: Build Windows Exe
 
 on:
   push:
@@ -9,31 +9,24 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4  # Updated to v4
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v5  # Updated to v5
       with:
-        python-version: '3.11' 
+        python-version: '3.9'
 
     - name: Install Dependencies
       run: |
-        pip install pyinstaller watchdog pypdf pystray pillow customtkinter packaging requests google-generativeai
+        pip install pyinstaller watchdog pypdf pystray pillow
 
-    # 1. Build the raw .exe
-    - name: Build EXE with PyInstaller
+    - name: Build with PyInstaller
       run: |
-        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=Pillow --hidden-import=pystray --hidden-import=customtkinter --hidden-import=requests --hidden-import=google.generativeai --name "SmartSort" main.py
+        # IMPORTANT: Ensure 'SmartSortAIPro.py' matches your actual filename!
+        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=pystray --name "SmartSort" SmartSortAIPro.py
 
-    # 2. Build the Installer using Inno Setup
-    - name: Compile .ISS to Setup.exe
-      uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4  # FIX: Updated to v4
       with:
-        path: setup.iss
-
-    # 3. Upload the Professional Installer
-    - name: Upload Installer
-      uses: actions/upload-artifact@v4
-      with:
-        name: SmartSort-Windows-Installer
-        path: Output/SmartSort_Setup_v3.exe
+        name: SmartSort-Windows-Exe
+        path: dist/SmartSort.exe
