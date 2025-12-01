@@ -56,7 +56,7 @@
         .btn-secondary { background: rgba(255,255,255,0.05); color: white; }
         .btn-secondary:hover { background: rgba(255,255,255,0.1); }
 
-        /* GIF Container */
+        /* Video Container (Fixed) */
         .demo-container {
             max-width: 800px;
             margin: 0 auto 80px;
@@ -65,13 +65,19 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             border: 1px solid #334155;
             aspect-ratio: 16/9;
-            background: #020617;
+            background: #000; /* Black background for letterboxing */
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #64748b;
         }
-        .demo-container img { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* Important: object-fit: contain ensures whole video is visible */
+        video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+            display: block;
+        }
 
         /* Features Section */
         .features { padding: 80px 5%; background: #162032; }
@@ -129,48 +135,51 @@
     <div class="hero">
         <div style="margin-bottom: 15px;">
             <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.2);">
-                v3.0 • Now with Settings Menu
+                v4.1 • Now with Generative AI
             </span>
         </div>
         <h1>Your Desktop.<br>Organized Automatically.</h1>
-        <p class="subtitle">The privacy-first "Digital Janitor" that cleans your Downloads & Desktop instantly using local AI.</p>
+        <p class="subtitle">The privacy-first "Digital Janitor" that reads, renames, and sorts your files instantly using local AI.</p>
         
         <div class="btn-group">
-            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v3.0/SmartSort.exe" class="btn btn-secondary" id="win-btn">
+            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v4.1/SmartSort_Setup_v3.exe" class="btn btn-secondary" id="win-btn">
                 🪟 Download for Windows
             </a>
-            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v3.0/SmartSort.zip" class="btn btn-secondary" id="mac-btn">
+            <a href="https://github.com/a1k7/SmartSort-AI/releases/download/v4.1/SmartSort.zip" class="btn btn-secondary" id="mac-btn">
                 🍎 Download for Mac
             </a>
         </div>
     </div>
 
     <div class="demo-container">
-        <img src="demofinal_1_1.mp4" alt="App Demo">
+        <video autoplay loop muted playsinline>
+            <source src="demofinal_1_1.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
     </div>
 
     <section class="features">
         <h2 class="section-title">Why SmartSort?</h2>
         <div class="grid">
             <div class="card">
+                <span class="icon">🤖</span>
+                <h3>AI Renaming</h3>
+                <p>New in v4.1! Reads file content and renames messy scans (e.g., "scan_09.pdf") to smart names (e.g., "Invoice_Amazon_Dec2025.pdf").</p>
+            </div>
+            <div class="card">
                 <span class="icon">🧠</span>
                 <h3>Deep Scan</h3>
-                <p>It reads inside PDFs and Docs to sort files by content (Invoices, Resumes, Reports), not just filenames.</p>
+                <p>Sorts files based on their content, not just extensions. It knows the difference between an Invoice and a Resume.</p>
             </div>
             <div class="card">
                 <span class="icon">🛡️</span>
                 <h3>Privacy First</h3>
-                <p>Runs 100% offline on your device. Your bank statements and personal files never leave your laptop.</p>
-            </div>
-            <div class="card">
-                <span class="icon">🧹</span>
-                <h3>Startup Cleanup</h3>
-                <p>Automatically scans and cleans your Desktop & Downloads folder the moment you log in.</p>
+                <p>Runs 100% offline by default. Your personal files never leave your device unless you enable Cloud AI mode.</p>
             </div>
             <div class="card">
                 <span class="icon">⚙️</span>
                 <h3>Full Control</h3>
-                <p>New in v3.0! Toggle features, view logs, and customize sorting rules with a beautiful UI.</p>
+                <p>Toggle features, view logs, and customize sorting rules with a beautiful dark-mode Dashboard.</p>
             </div>
         </div>
     </section>
@@ -186,11 +195,10 @@
         <div id="win-guide" class="guide-box active">
             <h3>🪟 How to Install on Windows</h3>
             <ol>
-                <li>Download <strong>SmartSort.exe</strong>.</li>
-                <li>Move it to a safe folder (like Documents).</li>
-                <li>Double-click to run.</li>
+                <li>Download <strong>SmartSort_Setup.exe</strong>.</li>
+                <li>Double-click to run the installer.</li>
                 <li><strong>SmartScreen Warning?</strong> Click <em>"More Info"</em> → <em>"Run Anyway"</em>.</li>
-                <li><strong>Auto-Start:</strong> Press <code>Win + R</code>, type <code>shell:startup</code>, and drag the app inside.</li>
+                <li>The app will install to your Start Menu and run automatically on startup.</li>
             </ol>
         </div>
 
@@ -207,7 +215,7 @@
     </div>
 
     <footer>
-        <p>Built with 💙 by <a href="https://github.com/a1k7">a1k7</a> • MIT License</p>
+        <p>Built with 💙 by a1k7<a href="https://github.com/a1k7">a1k7</a> • MIT License</p>
     </footer>
 
     <script>
@@ -221,14 +229,9 @@
             switchTab('win');
         }
 
-        // Tabs Logic
         function switchTab(os) {
-            // Hide all guides
             document.querySelectorAll('.guide-box').forEach(el => el.classList.remove('active'));
-            // Deactivate all buttons
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            
-            // Show selected
             document.getElementById(os + '-guide').classList.add('active');
             document.getElementById('tab-' + os).classList.add('active');
         }
