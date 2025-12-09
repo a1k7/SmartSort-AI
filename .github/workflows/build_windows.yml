@@ -3,30 +3,32 @@ name: Build Windows Exe
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4  # Updated to v4
+    - uses: actions/checkout@v3
 
     - name: Set up Python
-      uses: actions/setup-python@v5  # Updated to v5
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10'
 
     - name: Install Dependencies
       run: |
-        pip install pyinstaller watchdog pypdf pystray pillow
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
 
     - name: Build with PyInstaller
       run: |
-        # IMPORTANT: Ensure 'SmartSortAIPro.py' matches your actual filename!
-        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=pystray --name "SmartSort" SmartSortAIPro.py
+        pyinstaller --noconsole --onefile --hidden-import=pypdf --hidden-import=PIL --hidden-import=pystray --hidden-import=customtkinter --hidden-import=requests --hidden-import=pandas --hidden-import=openpyxl --hidden-import=docx --hidden-import=langchain_ollama --hidden-import=langchain_huggingface --hidden-import=langchain_community --hidden-import=faiss --name "SmartSortAI" main.py
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4  # FIX: Updated to v4
+      uses: actions/upload-artifact@v3
       with:
         name: SmartSort-Windows-Exe
-        path: dist/SmartSort.exe
+        path: dist/SmartSortAI.exe
